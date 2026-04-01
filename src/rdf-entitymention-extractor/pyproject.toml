@@ -1,0 +1,36 @@
+[project]
+name = "rdf-entitymention-extractor"
+version = "0.1.0"
+description = "Extract typed entity mentions from RDF strings for the Entity Resolution Engine (ERE)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "EUPL" }
+
+dependencies = [
+    "rdflib>=7.0.0",
+    "ere-model",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["rdf_entitymention_extractor.py"]
+
+[tool.uv.sources]
+ere-model = { path = "../model" }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+filterwarnings = [
+    # rdflib 7.x N3 parser uses a deprecated Dataset.default_context internally;
+    # this is an upstream issue outside our control.
+    "ignore::DeprecationWarning:rdflib",
+]

@@ -1,0 +1,11 @@
+[project]
+name = "cellar-entity-downloader"
+version = "0.1.0"
+description = "Downloads EU entities as clean Turtle files"
+dependencies = [
+    "sparqlwrapper>=2.0.0",
+    "rdflib>=7.0.0",
+]
+
+[tool.uv]
+dev-dependencies = []

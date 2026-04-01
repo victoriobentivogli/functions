@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: ere-postgres
+    environment:
+      POSTGRES_USER: ere
+      POSTGRES_PASSWORD: ere
+      POSTGRES_DB: ere
+    ports:
+      - "${ERE_PG_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ere -d ere"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ere-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@ere.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "${ERE_PGADMIN_PORT:-5051}:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

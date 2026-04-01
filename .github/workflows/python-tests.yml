@@ -1,0 +1,43 @@
+name: Python Tests (uv)
+
+on:
+  push:
+    branches: [ "develop" ]
+  pull_request:
+    branches: [ "develop" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - src/model
+          - src/rdf-entitymention-extractor
+          - src/entitymention-cleaner
+          - src/entitymention-embedder
+          - src/db-manager
+          - src/entitymention-clusterer
+
+    name: ${{ matrix.module }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.module }}
+        run: uv sync --extra dev
+
+      - name: Run tests
+        working-directory: ${{ matrix.module }}
+        run: uv run pytest -v

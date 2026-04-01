@@ -1,0 +1,31 @@
+[project]
+name = "db-manager"
+version = "0.1.0"
+description = "Database operations for EntityMention persistence in the Entity Resolution Engine (ERE)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "EUPL" }
+
+dependencies = [
+    "ere-model",
+    "psycopg[binary]>=3.2.0",
+    "pgvector>=0.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["db_manager.py"]
+
+[tool.uv.sources]
+ere-model = { path = "../model" }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
