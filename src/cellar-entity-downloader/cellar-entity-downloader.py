@@ -2,12 +2,12 @@ import logging
 import os
 import re
 import time
+from datetime import datetime, timezone
 from SPARQLWrapper import SPARQLWrapper, TURTLE, JSON
 from rdflib import Graph, Namespace, RDF, OWL
 
 # --- BATCH PARAMETERS ---
-SKIP = 2600      # Start at this record (OFFSET)
-LIMIT = 400   # Number of records to process in this run
+BATCH_SIZE = 400  # Number of records per batch
 
 # --- CONFIGURATION ---
 ENDPOINT_URL = "https://publications.europa.eu/webapi/rdf/sparql"
@@ -73,7 +73,7 @@ def get_organization_uris(skip, limit):
     results = sparql.query().convert()
     return [result["org"]["value"] for result in results["results"]["bindings"]]
 
-def fetch_and_save(org_uri, index, batch_total):
+def fetch_and_save(org_uri, index, total):
     sparql = SPARQLWrapper(ENDPOINT_URL)
     query = f"""
     {SPARQL_PREFIXES}
@@ -96,7 +96,7 @@ def fetch_and_save(org_uri, index, batch_total):
     
     try:
         raw_data = sparql.query().convert()
-        if not raw_data or len(raw_data) < 10: return
+        if not raw_data or len(raw_data) < 10: return False
         
         g = Graph()
         g.parse(data=raw_data, format="turtle")
@@ -109,22 +109,61 @@ def fetch_and_save(org_uri, index, batch_total):
         with open(os.path.join(OUTPUT_DIR, filename), "w", encoding="utf-8") as f:
             f.write(g.serialize(format="turtle"))
         
-        logger.info("[%d/%d] SAVED: %s", index, batch_total, filename)
+        logger.info("[%d/%d] SAVED: %s", index, total, filename)
+        return True
     except Exception:
-        logger.error("[%d/%d] FAILED: %s", index, batch_total, org_uri)
+        logger.error("[%d/%d] FAILED: %s", index, total, org_uri)
+        return False
 
 def main():
+    start_time = datetime.now(timezone.utc)
+    logger.info("Start time: %s", start_time.strftime("%Y-%m-%d %H:%M:%S UTC"))
     logger.info("Connecting to EU Publications Office...")
+
     total_in_store = get_total_count()
     logger.info("Total Organizations in Store: %s", total_in_store)
+    logger.info("Batch size: %d", BATCH_SIZE)
+    logger.info("-" * 50)
 
-    uris = get_organization_uris(SKIP, LIMIT)
-    batch_size = len(uris)
-    logger.info("Running Batch: SKIP %d, LIMIT %d (Processing %d records)\n%s", SKIP, LIMIT, batch_size, "-"*50)
+    offset = 0
+    processed = 0
+    success_count = 0
+    error_count = 0
 
-    for i, uri in enumerate(uris, start=1):
-        fetch_and_save(uri, i, batch_size)
-        time.sleep(0.2)
+    while True:
+        uris = get_organization_uris(offset, BATCH_SIZE)
+        if not uris:
+            break
+
+        batch_num = offset // BATCH_SIZE + 1
+        logger.info("Batch %d: fetching records %d–%d", batch_num, offset + 1, offset + len(uris))
+
+        for uri in uris:
+            processed += 1
+            ok = fetch_and_save(uri, processed, total_in_store if isinstance(total_in_store, int) else processed)
+            if ok:
+                success_count += 1
+            else:
+                error_count += 1
+            time.sleep(0.2)
+
+        if len(uris) < BATCH_SIZE:
+            break
+        offset += BATCH_SIZE
+
+    end_time = datetime.now(timezone.utc)
+    elapsed = (end_time - start_time).total_seconds()
+    rate = (processed / elapsed * 60) if elapsed > 0 else 0
+
+    logger.info("-" * 50)
+    logger.info("COMPLETED")
+    logger.info("  Start time:   %s", start_time.strftime("%Y-%m-%d %H:%M:%S UTC"))
+    logger.info("  End time:     %s", end_time.strftime("%Y-%m-%d %H:%M:%S UTC"))
+    logger.info("  Elapsed:      %.1f seconds", elapsed)
+    logger.info("  Processed:    %d", processed)
+    logger.info("  Success:      %d", success_count)
+    logger.info("  Errors:       %d", error_count)
+    logger.info("  Rate:         %.1f entities/min", rate)
 
 if __name__ == "__main__":
     main()
