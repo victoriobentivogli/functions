@@ -61,12 +61,23 @@ def get_total_count():
     except:
         return "Unknown"
 
-def get_organization_uris(skip, limit):
+def get_organization_uris(limit, after_uri=None):
+    """Fetch the next batch of organization URIs using cursor-based pagination.
+
+    Uses FILTER (?org > <after_uri>) instead of OFFSET to avoid the
+    Virtuoso 10 000-row sorted-output limit.
+    """
     sparql = SPARQLWrapper(ENDPOINT_URL)
+    filter_clause = f"FILTER (?org > <{after_uri}>)" if after_uri else ""
     query = f"""
     {SPARQL_PREFIXES}
-    PREFIX org: <http://www.w3.org/ns/org#> PREFIX epo: <http://data.europa.eu/a4g/ontology#> SELECT DISTINCT ?name ?org WHERE {{ ?org a org:Organization ; epo:hasLegalName ?name .}}
-    ORDER BY ?org OFFSET {skip} LIMIT {limit}
+    PREFIX org: <http://www.w3.org/ns/org#>
+    PREFIX epo: <http://data.europa.eu/a4g/ontology#>
+    SELECT DISTINCT ?name ?org WHERE {{
+        ?org a org:Organization ; epo:hasLegalName ?name .
+        {filter_clause}
+    }}
+    ORDER BY ?org LIMIT {limit}
     """
     sparql.setQuery(query)
     sparql.setReturnFormat(JSON)
@@ -125,18 +136,21 @@ def main():
     logger.info("Batch size: %d", BATCH_SIZE)
     logger.info("-" * 50)
 
-    offset = 0
+    last_uri = None
+    batch_num = 0
     processed = 0
     success_count = 0
     error_count = 0
 
     while True:
-        uris = get_organization_uris(offset, BATCH_SIZE)
+        uris = get_organization_uris(BATCH_SIZE, after_uri=last_uri)
         if not uris:
             break
 
-        batch_num = offset // BATCH_SIZE + 1
-        logger.info("Batch %d: fetching records %d–%d", batch_num, offset + 1, offset + len(uris))
+        batch_num += 1
+        batch_start = time.monotonic()
+        batch_errors = 0
+        logger.info("Batch %d: fetching %d records (after %s)", batch_num, len(uris), last_uri or "start")
 
         for uri in uris:
             processed += 1
@@ -145,11 +159,15 @@ def main():
                 success_count += 1
             else:
                 error_count += 1
+                batch_errors += 1
             time.sleep(0.2)
 
+        batch_elapsed = time.monotonic() - batch_start
+        logger.info("Batch %d done: %.1fs, %d errors, %d total processed", batch_num, batch_elapsed, batch_errors, processed)
+
+        last_uri = uris[-1]
         if len(uris) < BATCH_SIZE:
             break
-        offset += BATCH_SIZE
 
     end_time = datetime.now(timezone.utc)
     elapsed = (end_time - start_time).total_seconds()
