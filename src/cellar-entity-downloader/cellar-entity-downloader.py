@@ -7,7 +7,7 @@ from SPARQLWrapper import SPARQLWrapper, TURTLE, JSON
 from rdflib import Graph, Namespace, RDF, OWL
 
 # --- BATCH PARAMETERS ---
-BATCH_SIZE = 400  # Number of records per batch
+BATCH_SIZE = 1000  # Number of records per batch
 
 # --- CONFIGURATION ---
 ENDPOINT_URL = "https://publications.europa.eu/webapi/rdf/sparql"
@@ -68,7 +68,7 @@ def get_organization_uris(limit, after_uri=None):
     Virtuoso 10 000-row sorted-output limit.
     """
     sparql = SPARQLWrapper(ENDPOINT_URL)
-    filter_clause = f"FILTER (?org > <{after_uri}>)" if after_uri else ""
+    filter_clause = f'FILTER (STR(?org) > "{after_uri}")' if after_uri else ""
     query = f"""
     {SPARQL_PREFIXES}
     PREFIX org: <http://www.w3.org/ns/org#>
